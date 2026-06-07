@@ -9,18 +9,39 @@ app.get('/heads', async (req, res) => {
         const cursor = req.query.cursor || '';
         const robloxOnly = req.query.robloxOnly === 'true';
 
-        let url = `https://catalog.roblox.com/v1/search/items?assetTypeId=61&salesTypeFilter=1&limit=30`;
+        let url = `https://catalog.roblox.com/v2/search/items?assetTypes=61&limit=30&salesTypeFilter=1`;
         if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
-        if (cursor) url += `&cursor=${cursor}`;
+        if (cursor)  url += `&cursor=${encodeURIComponent(cursor)}`;
         if (robloxOnly) url += `&creatorName=Roblox`;
 
         const response = await axios.get(url, {
-            headers: { 'Accept': 'application/json' }
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            },
+            timeout: 10000
         });
 
-        res.json(response.data);
+        const data = response.data;
+        const items = [];
+
+        if (data.data && Array.isArray(data.data)) {
+            for (const item of data.data) {
+                items.push({
+                    id:   item.id,
+                    name: item.name || 'Unknown'
+                });
+            }
+        }
+
+        res.json({
+            items:          items,
+            nextPageCursor: data.nextPageCursor || null
+        });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Proxy error:', error.message);
+        res.status(500).json({ items: [], nextPageCursor: null });
     }
 });
 
