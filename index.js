@@ -8,19 +8,7 @@ const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 };
 
-async function getItemDetails(ids) {
-    try {
-        const body = { items: ids.map(id => ({ itemType: 'Asset', id })) };
-        const r = await axios.post(
-            'https://catalog.roblox.com/v1/catalog/items/details',
-            body,
-            { headers: { ...HEADERS, 'Content-Type': 'application/json' }, timeout: 8000 }
-        );
-        return r.data.data || [];
-    } catch (e) {
-        return [];
-    }
-}
+const HEADS_TAXONOMY = 's5NLP7BS9PRLKvUVca4XKg';
 
 app.get('/heads', async (req, res) => {
     const keyword    = req.query.keyword    || '';
@@ -28,39 +16,28 @@ app.get('/heads', async (req, res) => {
     const robloxOnly = req.query.robloxOnly === 'true';
 
     const params = new URLSearchParams({
-        assetTypeId:     '61',
-        limit:           '30',
+        taxonomy:        HEADS_TAXONOMY,
         salesTypeFilter: '1',
+        limit:           '30',
     });
-    if (keyword)    params.set('keyword',     keyword);
-    if (cursor)     params.set('cursor',      cursor);
+    if (keyword)    params.set('keyword', keyword);
+    if (cursor)     params.set('cursor',  cursor);
     if (robloxOnly) params.set('creatorName', 'Roblox');
 
     try {
-        const searchUrl = `https://catalog.roblox.com/v1/search/items?${params}`;
-        const searchRes = await axios.get(searchUrl, { headers: HEADERS, timeout: 8000 });
-        const rawItems  = searchRes.data.data || [];
-        const nextCursor = searchRes.data.nextPageCursor || null;
+        const url = `https://catalog.roblox.com/v2/search/items/details?${params}`;
+        console.log('Fetching:', url);
+        const r = await axios.get(url, { headers: HEADERS, timeout: 10000 });
 
-        if (rawItems.length === 0) {
-            return res.json({ items: [], nextPageCursor: null });
-        }
+        const raw        = r.data.data || [];
+        const nextCursor = r.data.nextPageCursor || null;
 
-        // Batch fetch names for the returned IDs
-        const ids     = rawItems.map(i => i.id).filter(Boolean);
-        const details = await getItemDetails(ids);
+        const items = raw.map(item => ({
+            id:   item.id,
+            name: item.name || 'Unknown'
+        })).filter(i => i.id);
 
-        // Build name lookup
-        const nameMap = {};
-        for (const d of details) {
-            if (d.id && d.name) nameMap[d.id] = d.name;
-        }
-
-        const items = ids.map(id => ({
-            id,
-            name: nameMap[id] || 'Unknown'
-        }));
-
+        console.log(`Returning ${items.length} items`);
         res.json({ items, nextPageCursor });
 
     } catch (error) {
